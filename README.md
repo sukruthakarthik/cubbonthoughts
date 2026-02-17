@@ -64,6 +64,25 @@ That file is machine-generated and is already excluded by `.gitignore`. Committi
 
 If you prefer, you can also install ffmpeg system-wide and ensure it’s on `PATH`.
 
+## Using Arial on Streamlit Cloud
+
+Streamlit Community Cloud runs on Linux and typically won’t have Windows fonts like Arial installed.
+
+You have two ways to use Arial:
+
+1) Upload at runtime
+- Use **Custom Font (.ttf/.otf)** in the UI and upload `arial.ttf`.
+- For bold/italic, upload the corresponding font files (e.g., `arialbd.ttf`, `ariali.ttf`, `arialbi.ttf`).
+
+2) Bundle fonts into the repo (auto-detected)
+- Create a folder `fonts/` in the project.
+- Copy your font files into it (example paths on Windows: `C:\\Windows\\Fonts\\arial.ttf`, `arialbd.ttf`, etc.).
+- Commit + push.
+
+The app will prefer `fonts/` on non-Windows so Streamlit Cloud can load them.
+
+Important: Arial is typically proprietary. Only bundle/redistribute it if you have the rights. For public apps, consider bundling an open alternative such as Liberation Sans/Arimo instead.
+
 ## Troubleshooting
 
 - **“ffmpeg was not found on PATH”**
@@ -72,6 +91,11 @@ If you prefer, you can also install ffmpeg system-wide and ensure it’s on `PAT
 
 - **Uploaded .mov doesn’t play in the browser**
 	- Streamlit may not preview `.mov` reliably, but processing should still work. Use **Process Full Video** and download the result.
+
+- **Invalid font `arial.ttf` / `cannot open resource` (Streamlit Cloud/Linux)**
+	- Some Windows font files (like `arial.ttf`) don’t exist on Linux.
+	- The app auto-falls back to common Linux fonts (DejaVu/Liberation) when available.
+	- If you need a specific font, upload a `.ttf`/`.otf` using **Custom Font** in the UI.
 
 ## Git notes
 

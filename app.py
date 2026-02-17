@@ -252,7 +252,82 @@ def _resolve_font_style(
         font_path = os.path.join("C:\\Windows\\Fonts", font_filename)
         return font_path if os.path.exists(font_path) else chosen["regular"]
 
-    return font_filename
+    # Non-Windows (e.g., Streamlit Community Cloud on Linux):
+    # Prefer a font file bundled with the app if present.
+    # Users can copy their own fonts into `fonts/` (see README) if they have rights.
+    repo_dir = os.path.dirname(__file__)
+    bundled_dir = os.path.join(repo_dir, "fonts")
+    if os.path.isdir(bundled_dir):
+        # Prefer common Arial-style names first to make it easy.
+        # Supported variant naming examples:
+        # - arial.ttf / arialbd.ttf / ariali.ttf / arialbi.ttf
+        # - Arial.ttf / Arial Bold.ttf / Arial Italic.ttf / Arial Bold Italic.ttf
+        desired: list[str] = []
+        if font_key in {"Arial", "Helvetica"}:
+            if bold and italic:
+                desired += ["arialbi.ttf", "Arial Bold Italic.ttf", "Arial-BoldItalic.ttf"]
+            elif bold:
+                desired += ["arialbd.ttf", "Arial Bold.ttf", "Arial-Bold.ttf"]
+            elif italic:
+                desired += ["ariali.ttf", "Arial Italic.ttf", "Arial-Italic.ttf"]
+            else:
+                desired += ["arial.ttf", "Arial.ttf"]
+        # Also try the Windows filename we would have chosen for this font family.
+        desired.append(font_filename)
+
+        for name in desired:
+            candidate = os.path.join(bundled_dir, name)
+            if os.path.exists(candidate):
+                return candidate
+
+    # Linux/Streamlit Cloud: Windows font filenames like "arial.ttf" may not exist.
+    # Prefer commonly available system fonts (DejaVu/Liberation) when present.
+    linux_candidates: list[str] = []
+
+    def add_if(*paths: str) -> None:
+        for p in paths:
+            if p and p not in linux_candidates:
+                linux_candidates.append(p)
+
+    # DejaVu
+    if font_key in {"Arial", "Helvetica", "Verdana", "Impact"}:
+        add_if(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf",
+        )
+    elif font_key in {"Courier"}:
+        add_if(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Oblique.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-BoldOblique.ttf",
+        )
+    else:  # Times New Roman / Georgia
+        add_if(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf",
+        )
+
+    # Liberation (common on many distros)
+    add_if(
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-BoldItalic.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+    )
+
+    for candidate in linux_candidates:
+        if os.path.exists(candidate):
+            return candidate
+
+    # As a last resort, return empty string so callers can omit font.
+    return ""
 
 
 def _as_pos_fn(pos: tuple[int, int] | Callable[[float], tuple[float, float]]):
@@ -324,15 +399,17 @@ def _make_styled_layers(
         return (cx, cy)
 
     txt_clip = TextClip(
-        text=text,
-        font_size=fontsize,
-        font=font,
-        color=color,
-        method="caption",
-        size=(max(1, int(text_box_w)), max(1, int(text_box_h))),
-        text_align=text_align,
-        stroke_color=stroke_color if stroke_width > 0 else None,
-        stroke_width=int(stroke_width) if stroke_width > 0 else 0,
+        **{
+            "text": text,
+            "font_size": fontsize,
+            **({"font": font} if font else {}),
+            "color": color,
+            "method": "caption",
+            "size": (max(1, int(text_box_w)), max(1, int(text_box_h))),
+            "text_align": text_align,
+            "stroke_color": stroke_color if stroke_width > 0 else None,
+            "stroke_width": int(stroke_width) if stroke_width > 0 else 0,
+        }
     ).with_start(float(start)).with_duration(duration)
 
     layers: list = []
@@ -358,13 +435,15 @@ def _make_styled_layers(
 
     if shadow_enabled and shadow_opacity > 0:
         shadow_clip = TextClip(
-            text=text,
-            font_size=fontsize,
-            font=font,
-            color=shadow_color,
-            method="caption",
-            size=(max(1, int(text_box_w)), max(1, int(text_box_h))),
-            text_align=text_align,
+            **{
+                "text": text,
+                "font_size": fontsize,
+                **({"font": font} if font else {}),
+                "color": shadow_color,
+                "method": "caption",
+                "size": (max(1, int(text_box_w)), max(1, int(text_box_h))),
+                "text_align": text_align,
+            }
         ).with_start(float(start)).with_duration(duration).with_opacity(float(shadow_opacity))
 
         def shadow_pos(t: float, dx=int(shadow_dx), dy=int(shadow_dy)) -> tuple[float, float]:
@@ -450,13 +529,15 @@ def process_video_clip(
                 # Compute target position based on resulting rendered text size.
                 # Create a temporary clip just to get (w,h) reliably with our box size.
                 measure_clip = TextClip(
-                    text=seg_text,
-                    font_size=fontsize,
-                    font=font,
-                    color=color,
-                    method="caption",
-                    size=(text_box_w, text_box_h),
-                    text_align="center",
+                    **{
+                        "text": seg_text,
+                        "font_size": fontsize,
+                        **({"font": font} if font else {}),
+                        "color": color,
+                        "method": "caption",
+                        "size": (text_box_w, text_box_h),
+                        "text_align": "center",
+                    }
                 )
                 measure_w, measure_h = int(measure_clip.w), int(measure_clip.h)
                 target_x, target_y = _target_xy(position_sel, clip.w, clip.h, measure_w, measure_h)
@@ -526,13 +607,15 @@ def process_video_clip(
             text_box_h = max(1, int(clip.h * 0.25))
 
             measure_clip = TextClip(
-                text=text,
-                font_size=fontsize,
-                font=font,
-                color=color,
-                method="caption",
-                size=(text_box_w, text_box_h),
-                text_align="center",
+                **{
+                    "text": text,
+                    "font_size": fontsize,
+                    **({"font": font} if font else {}),
+                    "color": color,
+                    "method": "caption",
+                    "size": (text_box_w, text_box_h),
+                    "text_align": "center",
+                }
             )
             measure_w, measure_h = int(measure_clip.w), int(measure_clip.h)
             target_x, target_y = _target_xy(position_sel, clip.w, clip.h, measure_w, measure_h)
