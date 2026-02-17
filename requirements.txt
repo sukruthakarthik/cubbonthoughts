@@ -1,0 +1,8 @@
+# Streamlit Community Cloud reads this file to install dependencies.
+# Keep names as PyPI package names (may differ from import names).
+
+streamlit
+moviepy
+Pillow
+imageio-ffmpeg
+openai-whisper
