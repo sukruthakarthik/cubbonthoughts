@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# App-generated / media
+output/
+data/videos/
+*.mp4
+*.mov
+*.m4a
+*.wav
+
+# Bundled ffmpeg shim
+.ffmpeg_bin/
+
+# Temp
+temp-*
